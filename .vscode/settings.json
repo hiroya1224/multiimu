@@ -1,0 +1,20 @@
+{
+    "python.autoComplete.extraPaths": [
+        "/home/leus/catkin_ws/devel/lib/python3/dist-packages",
+        "/opt/ros/noetic/lib/python3/dist-packages",
+        "/opt/openrobots/lib/python3.8/site-packages",
+        "/opt/openrobots/lib/python2.7/site-packages",
+        "/home/leus/raisim/raisim_devel/lib",
+        "/opt/openrobots/lib/python2.7/dist-packages",
+        "/opt/openrobots/lib/python2.7/site-packages"
+    ],
+    "python.analysis.extraPaths": [
+        "/home/leus/catkin_ws/devel/lib/python3/dist-packages",
+        "/opt/ros/noetic/lib/python3/dist-packages",
+        "/opt/openrobots/lib/python3.8/site-packages",
+        "/opt/openrobots/lib/python2.7/site-packages",
+        "/home/leus/raisim/raisim_devel/lib",
+        "/opt/openrobots/lib/python2.7/dist-packages",
+        "/opt/openrobots/lib/python2.7/site-packages"
+    ]
+}
