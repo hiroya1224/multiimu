@@ -11,6 +11,7 @@ class CoeffSubscriber:
         
         # Dictionary to store messages by frame_id
         self.coeff_queues = defaultdict(lambda: deque(maxlen=10))
+        self.latest_base_timestamp = -1.0
 
     def callback(self, msg):
         frame_id = msg.header.frame_id
@@ -24,7 +25,12 @@ class CoeffSubscriber:
         oldest_frame_id = self.get_oldest_frame_id()
         if oldest_frame_id:
             central_timestamp_oldest = self.get_central_timestamp(oldest_frame_id)
-            rospy.loginfo(f"Central timestamp for frame ID '{oldest_frame_id}': {central_timestamp_oldest}")
+            if self.latest_base_timestamp != central_timestamp_oldest:
+                # rospy.loginfo(f"Central timestamp for frame ID '{oldest_frame_id}': {central_timestamp_oldest}")
+                self.latest_base_timestamp = central_timestamp_oldest
+            else:
+                rospy.loginfo(f"Same central timestamp: skipped")
+
 
             # Perform interpolation using this timestamp
             self.perform_interpolation(central_timestamp_oldest)
@@ -50,17 +56,17 @@ class CoeffSubscriber:
             if closest_msg:
                 t_list = closest_msg.timelist
                 # Reshape coefflist based on half_datalength and polynomial_degree
-                half_datalength = closest_msg.half_datalength
-                polynomial_degree = closest_msg.polynomial_degree
-                coeffs = np.array(closest_msg.coefflist).reshape(half_datalength, polynomial_degree + 1)
+                M = closest_msg.half_datalength
+                N = closest_msg.polynomial_degree
+                coeffs = np.array(closest_msg.coefflist).reshape(N + 1, 6)
                 
                 # Check if base_time is within the t_list range
                 if t_list[0] <= base_time <= t_list[-1]:
                     delta_t = base_time - t_list[len(t_list) // 2]
 
                     # Perform interpolation using polynomial coefficients
-                    interpolated_value = self.interpolate_using_coeffs(coeffs, delta_t)
-                    rospy.loginfo(f"Interpolated value for frame ID '{frame_id}': {interpolated_value}")
+                    interpolated_value = self.interpolated_value(coeffs, delta_t)
+                    # rospy.loginfo(f"Interpolated value for frame ID '{frame_id}': {interpolated_value}")
                 else:
                     rospy.loginfo(f"Base time {base_time} is out of range for frame ID '{frame_id}'")
 
@@ -77,11 +83,21 @@ class CoeffSubscriber:
                 closest_msg = msg
 
         return closest_msg
+    
 
-    def interpolate_using_coeffs(self, coeffs, delta_t):
+    @staticmethod
+    def interpolated_value(coeffs, t):
         """Interpolate values using the provided polynomial coefficients and time difference."""
-        time_powers = np.array([delta_t ** i for i in range(coeffs.shape[1])])
-        return coeffs @ time_powers  # Resulting in interpolated values
+        ts = np.array([t**i for i in range(coeffs.shape[0])])
+        return np.dot(coeffs.T, ts)
+    
+
+    @staticmethod
+    def interpolated_derivative_value(coeffs, t):
+        """Interpolate values of time derivative using the provided polynomial coefficients and time difference."""
+        dts = np.array([i * t**(max(0, i-1)) for i in range(coeffs.shape[0])])
+        return np.dot(coeffs.T, dts)
+    
 
     def run(self):
         rospy.spin()

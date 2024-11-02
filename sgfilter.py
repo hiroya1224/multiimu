@@ -71,6 +71,9 @@ class SavitzkyGolayFilter:
         # Create matrix A for polynomial fitting
         A = np.vstack([shift_t ** i for i in range(self.poly_deg + 1)]).T
 
+        rospy.logwarn(f"A.shape = {A.shape}")
+        rospy.logwarn(f"imu_data.shape = {imu_data.shape}")
+    
         # Calculate polynomial coefficients using least squares
         coeffs = np.linalg.pinv(A) @ imu_data
 
@@ -88,6 +91,12 @@ class SavitzkyGolayFilter:
             coeff_msg.half_datalength = self.half_datalength
             coeff_msg.timelist = np.array(self.imu_timestamps_queues[frame_id]).tolist()
             coeff_msg.coefflist = coeffs.flatten().tolist()  # Flatten the coefficients for the message
+
+            rospy.logwarn(f"coeff_msg.polynomial_degree = {coeff_msg.polynomial_degree}")
+            rospy.logwarn(f"coeff_msg.half_datalength = {coeff_msg.half_datalength}")
+            rospy.logwarn(f"len(coeff_msg.coefflist) = {len(coeff_msg.coefflist)}")
+            rospy.logwarn(f"coeffs.shape = {coeffs.shape}")
+            rospy.logwarn(f"self.queue_size = {self.queue_size}")
 
             rospy.logwarn(np.array(self.imu_timestamps_queues[frame_id]).tolist())
             
