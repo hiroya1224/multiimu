@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Game Controller</title>
+  <style>
+    .controller {
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      justify-content: center;
+      width: 90vw;
+      max-width: 800px;
+      margin: auto;
+      padding: 20px;
+      background-color: #333;
+      border-radius: 10px;
+      user-select: none;
+      touch-action: none;
+    }
+
+    .button-group {
+      position: relative;
+      width: 200px;
+      height: 200px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .button {
+      width: 70px;
+      height: 70px;
+      background-color: #666;
+      border-radius: 50%;
+      position: absolute;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      color: white;
+      touch-action: none;
+      user-select: none;
+    }
+
+    /* ボタンの配置 */
+    #buttonX {
+      top: 0;
+      left: 50%;
+      transform: translateX(-50%);
+    }
+
+    /* 上 */
+    #buttonY {
+      top: 50%;
+      left: 0;
+      transform: translateY(-50%);
+    }
+
+    /* 左 */
+    #buttonA {
+      top: 50%;
+      right: 0;
+      transform: translateY(-50%);
+    }
+
+    /* 右 */
+    #buttonB {
+      bottom: 0;
+      left: 50%;
+      transform: translateX(-50%);
+    }
+
+    /* 下 */
+
+    .joystick {
+      width: 200px;
+      height: 200px;
+      background-color: #444;
+      border-radius: 50%;
+      position: relative;
+      margin-left: 150px;
+      /* 左側に余白を追加してボタンから離す */
+      touch-action: none;
+    }
+
+    .stick {
+      width: 80px;
+      height: 80px;
+      top: calc((100% - 80px) / 2);
+      left: calc((100% - 80px) / 2);
+      background-color: #888;
+      border-radius: 50%;
+      position: absolute;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* 加速度センサのオンオフボタン */
+    #requestPermissionButton {
+      display: block;
+      margin-top: 20px;
+      padding: 10px 20px;
+      font-size: 16px;
+      color: #fff;
+      background-color: #555;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="controller">
+    <div class="button-group">
+      <div class="button" id="buttonX">X</div>
+      <div class="button" id="buttonY">Y</div>
+      <div class="button" id="buttonA">A</div>
+      <div class="button" id="buttonB">B</div>
+    </div>
+    <div class="joystick" id="joystick">
+      <div class="stick" id="stick"></div>
+    </div>
+  </div>
+
+  <button id="requestPermissionButton">Enable Device Orientation</button>
+
+  <script>
+    let previousPosition = { x: 0, y: 0 };
+    let isJoystickActive = false;
+    let sendInterval;
+    let lastTouchEnd = 0;
+
+    // WebSocketの初期化
+    const socket = new WebSocket(`wss://${window.location.hostname}:9999/server_handler`);
+
+    // ボタンに対するイベントリスナーを一括で追加
+    ['A', 'B', 'X', 'Y'].forEach(button => {
+      const buttonElement = document.getElementById(`button${button}`);
+      buttonElement.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        sendData(`button${button}`, 'press');
+      });
+      buttonElement.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        sendData(`button${button}`, 'release');
+      });
+    });
+
+    // デバイスの姿勢データの送信
+    function eulerToQuaternion(alpha, beta, gamma) {
+      const _x = beta * Math.PI / 180;
+      const _y = gamma * Math.PI / 180;
+      const _z = alpha * Math.PI / 180;
+
+      const cX = Math.cos(_x / 2);
+      const cY = Math.cos(_y / 2);
+      const cZ = Math.cos(_z / 2);
+      const sX = Math.sin(_x / 2);
+      const sY = Math.sin(_y / 2);
+      const sZ = Math.sin(_z / 2);
+
+      const w = sX * sY * sZ + cX * cY * cZ;
+      const x = cX * sY * sZ + cY * cZ * sX;
+      const y = cX * cZ * sY - cY * sX * sZ;
+      const z = cX * cY * sZ - cZ * sX * sY;
+
+      return { w, x, y, z };
+    }
+
+
+    // function handleOrientation(event) {
+    //   const quaternion = eulerToQuaternion(event.alpha, event.beta, event.gamma);
+    //   sendData('deviceOrientation', quaternion);
+    // }
+    // 姿勢データ送信のインターバル設定（100ms間隔）
+    let lastOrientationSent = 0;
+    const orientationInterval = 100; // ミリ秒
+
+    function handleOrientation(event) {
+      const now = Date.now();
+
+      // 前回の送信から指定のインターバル経過後に送信
+      if (now - lastOrientationSent >= orientationInterval) {
+        const quaternion = eulerToQuaternion(event.alpha, event.beta, event.gamma);
+        sendData('deviceOrientation', quaternion);
+        lastOrientationSent = now; // 最後の送信時刻を更新
+      }
+    }
+
+
+    // データ送信用関数
+    function sendData(control, action) {
+      const data = JSON.stringify({ control, action });
+      if (socket.readyState === WebSocket.OPEN) {
+        socket.send(data);
+      }
+    }
+
+    // 加速度センサのオンオフボタン
+    const permissionButton = document.getElementById("requestPermissionButton");
+
+    permissionButton.addEventListener("click", () => {
+      if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
+        DeviceMotionEvent.requestPermission()
+          .then(permissionState => {
+            if (permissionState === 'granted') {
+              window.addEventListener('deviceorientation', handleOrientation);
+              permissionButton.style.display = 'none'; // 許可後はボタンを非表示に
+            } else {
+              alert("Device orientation permission not granted.");
+            }
+          })
+          .catch(error => {
+            console.error("Permission request error:", error);
+          });
+      } else {
+        // iOS以外または許可が不要なブラウザの場合
+        window.addEventListener('deviceorientation', handleOrientation);
+        permissionButton.style.display = 'none'; // 他のブラウザでもボタンを非表示に
+      }
+    });
+
+    // ダブルタップによる拡大を防止
+    document.addEventListener('touchend', (e) => {
+      const now = new Date().getTime();
+      if (now - lastTouchEnd <= 300) {
+        e.preventDefault();
+      }
+      lastTouchEnd = now;
+    }, false);
+
+    // ジョイスティック制御
+    const joystick = document.getElementById('joystick');
+    const stick = document.getElementById('stick');
+    const joystickRadius = joystick.offsetWidth / 2;
+    const stickRadius = stick.offsetWidth / 2;
+
+    joystick.addEventListener('touchmove', (event) => {
+      event.preventDefault();
+      const touch = event.touches[0];
+      const rect = joystick.getBoundingClientRect();
+      const centerX = rect.left + joystickRadius;
+      const centerY = rect.top + joystickRadius;
+
+      let x = touch.clientX - centerX;
+      let y = touch.clientY - centerY;
+
+      const distance = Math.sqrt(x * x + y * y);
+      if (distance > joystickRadius - stickRadius) {
+        const angle = Math.atan2(y, x);
+        x = (joystickRadius - stickRadius) * Math.cos(angle);
+        y = (joystickRadius - stickRadius) * Math.sin(angle);
+      }
+
+      stick.style.transform = `translate(${x}px, ${y}px)`;
+      previousPosition = { x: x / joystickRadius, y: y / joystickRadius };
+
+      isJoystickActive = true;
+      startSendingData();
+    });
+
+    joystick.addEventListener('touchend', () => {
+      stick.style.transform = `translate(0px, 0px)`;
+      previousPosition = { x: 0, y: 0 };
+      isJoystickActive = false;
+      sendData('joystick', previousPosition);
+      stopSendingData();
+    });
+
+    // ジョイスティックデータ送信を開始
+    function startSendingData() {
+      if (!sendInterval) {
+        sendInterval = setInterval(() => {
+          if (isJoystickActive) {
+            sendData('joystick', previousPosition);
+          }
+        }, 100);
+      }
+    }
+
+    // ジョイスティックデータ送信を停止
+    function stopSendingData() {
+      clearInterval(sendInterval);
+      sendInterval = null;
+    }
+  </script>
+
+</body>
+
+</html>
