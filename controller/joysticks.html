@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>1-DOF Joysticks with WebSocket</title>
+    <style>
+        .controller {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 90vw;
+            max-width: 800px;
+            margin: auto;
+            padding: 20px;
+            background-color: #333;
+            border-radius: 10px;
+            user-select: none;
+            touch-action: none;
+        }
+
+        .joystick-group {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 50px;
+        }
+
+        .joystick {
+            background-color: #444;
+            position: relative;
+            touch-action: none;
+            border-radius: 25px;
+        }
+
+        .joystick-horizontal {
+            width: 200px;
+            height: 50px;
+        }
+
+        .joystick-vertical {
+            width: 50px;
+            height: 200px;
+        }
+
+        .stick {
+            width: 50px;
+            height: 50px;
+            background-color: #888;
+            border-radius: 50%;
+            position: absolute;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .joystick-horizontal .stick {
+            top: 0;
+            left: calc(50% - 25px);
+            /* 水平ジョイスティックで中央配置 */
+        }
+
+        .joystick-vertical .stick {
+            left: 0;
+            top: calc(50% - 25px);
+            /* 垂直ジョイスティックで中央配置 */
+        }
+
+        .label {
+            font-size: 18px;
+            color: #fff;
+            margin-bottom: 10px;
+        }
+
+        /* テキストラベル */
+        .joystick-label {
+            position: absolute;
+            font-size: 14px;
+            color: #fff;
+        }
+
+        /* X方向のラベル配置 */
+        .joystick-horizontal .label-left {
+            left: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+
+        .joystick-horizontal .label-right {
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+
+        /* Y方向のラベル配置 */
+        .joystick-vertical .label-top {
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+
+        .joystick-vertical .label-bottom {
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="controller">
+        <div class="joystick-group">
+            <!-- 横方向のジョイスティック -->
+            <div class="label">X Joystick</div>
+            <div class="joystick joystick-horizontal" id="joystickX">
+                <span class="joystick-label label-left">Left</span>
+                <span class="joystick-label label-right">Right</span>
+                <div class="stick" id="stickX"></div>
+            </div>
+
+            <!-- 縦方向のジョイスティック -->
+            <div class="label">Y Joystick</div>
+            <div class="joystick joystick-vertical" id="joystickY">
+                <span class="joystick-label label-top">Up</span>
+                <span class="joystick-label label-bottom">Down</span>
+                <div class="stick" id="stickY"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let previousX = 0;
+        let previousY = 0;
+
+        // WebSocketの初期化
+        const socket = new WebSocket(`wss://${window.location.hostname}:9999/server_handler`);
+
+        // WebSocketデータ送信
+        function sendData(control, action) {
+            const data = JSON.stringify({ control, action });
+            if (socket.readyState === WebSocket.OPEN) {
+                socket.send(data);
+            }
+        }
+
+        const joystickX = document.getElementById('joystickX');
+        const stickX = document.getElementById('stickX');
+        const joystickY = document.getElementById('joystickY');
+        const stickY = document.getElementById('stickY');
+
+        const joystickXWidth = joystickX.offsetWidth;
+        const stickXWidth = stickX.offsetWidth;
+
+        const joystickYHeight = joystickY.offsetHeight;
+        const stickYHeight = stickY.offsetHeight;
+
+        // 横方向のジョイスティック
+        joystickX.addEventListener('touchmove', (event) => {
+            event.preventDefault();
+            const touch = event.touches[0];
+            const rect = joystickX.getBoundingClientRect();
+
+            let x = touch.clientX - rect.left - joystickXWidth / 2;
+            x = Math.max(-joystickXWidth / 2 + stickXWidth / 2, Math.min(x, joystickXWidth / 2 - stickXWidth / 2));
+            stickX.style.transform = `translate(${x}px, 0)`;
+            previousX = x / (joystickXWidth / 2);
+            console.log(`X: ${previousX.toFixed(2)}`);
+
+            // WebSocketでXジョイスティックのデータ送信
+            sendData('joystickX', { x: previousX.toFixed(2) });
+        });
+
+        joystickX.addEventListener('touchend', () => {
+            stickX.style.transform = `translate(0, 0)`;
+            previousX = 0;
+            console.log(`X: ${previousX.toFixed(2)}`);
+
+            // ジョイスティックが中央に戻った場合もデータ送信
+            sendData('joystickX', { x: previousX.toFixed(2) });
+        });
+
+        // 縦方向のジョイスティック
+        joystickY.addEventListener('touchmove', (event) => {
+            event.preventDefault();
+            const touch = event.touches[0];
+            const rect = joystickY.getBoundingClientRect();
+
+            let y = touch.clientY - rect.top - joystickYHeight / 2;
+            y = Math.max(-joystickYHeight / 2 + stickYHeight / 2, Math.min(y, joystickYHeight / 2 - stickYHeight / 2));
+            stickY.style.transform = `translate(0, ${y}px)`;
+            previousY = y / (joystickYHeight / 2);
+            console.log(`Y: ${previousY.toFixed(2)}`);
+
+            // WebSocketでYジョイスティックのデータ送信
+            sendData('joystickY', { y: previousY.toFixed(2) });
+        });
+
+        joystickY.addEventListener('touchend', () => {
+            stickY.style.transform = `translate(0, 0)`;
+            previousY = 0;
+            console.log(`Y: ${previousY.toFixed(2)}`);
+
+            // ジョイスティックが中央に戻った場合もデータ送信
+            sendData('joystickY', { y: previousY.toFixed(2) });
+        });
+    </script>
+
+</body>
+
+</html>

@@ -111,16 +111,12 @@ class JointImuModule(JointList):
 class GripperForApple(JointList):
     def __init__(self):
         super().__init__([
-            JointImuModule("gripper_yaw_joint", "link3", "gripper_base_link", 
-                        np.array([0.0850, 0.0008, 0.0]),
-                        np.array([1.570796325, 0.0, 0.0])
-            ),
-            JointImuModule("gripper_parallel_joint", "gripper_base_link", "gripper_parallel_dummylink",
-                        np.array([0.0, 0.0, 0.0400]),
-                        np.array([0.0, 0.0, 0.0])
+            JointImuModule("gripper_grasp_joint", "link3", "gripper_base_link", 
+                        np.array([0.0, 0.0, 0.0]),
+                        np.array([ 0.0, 0.0, -np.pi/4])
             ),
             FixedJoint("gripper_endeffector_fixedjoint", "gripper_base_link", "grasp_point",
-                       np.array([0.0, 0.0, 0.0700]),
+                       np.array([0.0, 0.0, 0.135]),
                        np.array([3.14159265, 0, 0]),
             )
         ])
@@ -197,8 +193,8 @@ class AppleKinovo(Robot):
         ])
 
 symparam_list = SymbolicParameterList([
-    SymbolicParameter("link1", "link2", np.random.randn(3), np.random.randn(3)),
-    SymbolicParameter("link2", "link3", np.random.randn(3), np.random.randn(3))
+    SymbolicParameter("link1", "link2", np.random.randn(3)*10, np.random.randn(3)),
+    SymbolicParameter("link2", "link3", np.random.randn(3)*10, np.random.randn(3))
 ])
 
 

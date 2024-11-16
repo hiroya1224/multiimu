@@ -1,0 +1,5 @@
+<launch>
+    <arg name="baud" default="921600"/>
+    <node pkg="multiimu" type="run_https_async.py" name="https_server" output="screen" />
+    <node pkg="multiimu" type="atoms3_ros_async.py" name="atoms3_ros_async" output="screen" respawn="true"/>
+</launch>

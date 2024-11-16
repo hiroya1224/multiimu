@@ -1,0 +1,317 @@
+<html>
+
+<head>
+    <title>Html-Qrcode Demo</title>
+    <script>
+        // https://ja.javascript.info/async-await
+        var reConnection = true;
+        const delayForReConnection = async (ms) => {
+            reConnection = false;
+            await new Promise(resolve => setTimeout(resolve, ms));
+            reConnection = true;
+        }
+
+        var isConnected = false;
+        var webSocket;
+        // var messageTextArea = document.getElementById("messageTextArea");
+        var registrationNotification;
+
+        var imuList = new Array();
+        var activeImuNames = ["", ""];
+
+        function addElementToSelectors() {
+            const selectors = document.querySelectorAll(".imu-selector");
+            selectors.forEach((select) => {
+                select.options.length = 0;
+
+                // for default value
+                let newOption = document.createElement("option");
+                newOption.value = "";
+                newOption.text = "Select IMU";
+                select.add(newOption);
+
+                imuList.forEach((imuName) => {
+                    let newOption = document.createElement("option");
+                    newOption.value = imuName;
+                    newOption.text = imuName;
+                    select.add(newOption);
+                });
+            });
+        }
+
+        function onImuNameChange(selectorId, selectedValue) {
+            activeImuNames[selectorId] = selectedValue;
+            webSocket.send(JSON.stringify({ "request": "imu_name", "name_list": activeImuNames }));
+        }
+
+        // 関数が実行される
+        function onArrayChange() {
+            addElementToSelectors();
+            console.log("hello");
+        }
+
+
+
+        // Proxyを作成して変更を監視
+        const imuListProxy = new Proxy(imuList, {
+            set(target, property, value) {
+                target[property] = value; // 元の配列に変更を反映
+                onArrayChange(); // 変更を検知して関数を実行
+                return true;
+            }
+        });
+
+        function addImuToList(message) {
+            jsonObj = JSON.parse(message.data);
+            console.log(message.data);
+            registrationNotification.innerHTML += `<p>[${jsonObj.time.toFixed(6)}]: Registered IMU ${jsonObj.mac} (at ${jsonObj.ip}).</p>`;
+            imuList.push(jsonObj.mac);
+        }
+
+        // サーバとの通信を接続する関数
+        function connect() {
+            if (!reConnection) return false;
+
+            var host = window.location.hostname;
+            var wsshost = "wss://" + host + ":8003";
+            webSocket = new WebSocket(wsshost);
+
+            // ソケット接続すれば呼び出す関数を設定
+            webSocket.onopen = function (message) {
+                isConnected = true;
+            };
+
+            // ソケット接続が切ると呼び出す関数を設定
+            webSocket.onclose = function (message) {
+                isConnected = false;
+            };
+
+            // ソケット通信中でエラーが発生すれば呼び出す関数を設定
+            webSocket.onerror = function (event) {
+                // delayForReConnection(1000);
+                connect();
+            };
+
+            // ソケットサーバからメッセージが受信すれば呼び出す関数を設定
+            webSocket.onmessage = function (message) {
+                jsonObj = JSON.parse(message.data);
+                console.log(message.data);
+                registrationNotification.innerHTML += `<p>[${jsonObj.time.toFixed(6)}]: Registered IMU ${jsonObj.mac} (at ${jsonObj.ip}).</p>`;
+                imuList.push(jsonObj.mac);
+                addElementToSelectors();
+            };
+
+            return true;
+        }
+
+        // サーバとの通信を切断する関数
+        function disconnect() {
+            webSocket.close();
+        }
+    </script>
+    <style>
+        body {
+            display: flex;
+            flex-direction: row;
+            /* Arrange elements side by side */
+            align-items: flex-start;
+            /* Align items to the top */
+            margin: 0;
+            height: 100%;
+        }
+
+        .left-section {
+            display: flex;
+            flex-direction: column;
+            /* Vertically stack qr-reader and notification */
+            margin: 3vw;
+            /* Add some space */
+            justify-content: center;
+            /* Center vertically within the left section */
+            align-items: center;
+            /* Center horizontally within the left section */
+            /* margin-right: 20px; Add some space to the right */
+            /* height: 100vh; Full viewport height */
+        }
+
+        .right-section {
+            width: calc(100vw - 400px);
+            /* Adjust the width of the right section as needed */
+            background-color: lightgray;
+            /* Just for visibility, adjust or remove */
+            padding: 20px;
+            border: 1px solid #000;
+        }
+
+        #qr-reader {
+            width: 400px;
+        }
+
+        #registration_notification {
+            margin-top: 20px;
+            /* Add space between QR reader and notification */
+        }
+
+        #show-debug-output {
+            width: 100%;
+            height: 80%;
+            border: none;
+        }
+
+        #imu-selector-container {
+            display: flex;
+            align-items: center;
+            /* Center the items vertically */
+            margin-bottom: 20px;
+            /* Add some spacing below */
+        }
+
+        /* Title styles */
+        .title {
+            margin-left: 20px;
+            margin-right: 20px;
+            /* Add space between title and selectors */
+            font-weight: bold;
+            font-size: 20px;
+        }
+
+        /* Selector container to align two selectors */
+        .imu-selector-div {
+            display: flex;
+            gap: 20px;
+            /* Add space between the two selectors */
+        }
+
+        /* Increase the size of the select dropdowns */
+        select {
+            font-size: 18px;
+            /* Increase select dropdown font size */
+            padding: 10px;
+            /* Add padding to make the dropdown larger */
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Left side: qr-reader and registration_notification vertically stacked -->
+    <div class="left-section">
+        <div id="qr-reader"></div>
+        <div id="registration_notification">
+            <p>=== Registration Notifications ===</p>
+        </div>
+    </div>
+
+    <!-- Right side: New div area -->
+    <div class="right-section" id="right-section">
+        <!-- <p>This is the new right section content.</p> -->
+
+        <div id="imu-selector-container">
+            <div class="title">First IMU's Address:</div>
+            <div class="imu-selector-div" id="imu-selector1">
+                <select class="imu-selector" id="dropdown">
+                    <option value="">Select IMU</option>
+                </select>
+            </div>
+
+            <div class="title">Second IMU's Address:</div>
+            <div class="imu-selector-div" id="imu-selector2">
+                <select class="imu-selector" id="dropdown">
+                    <option value="">Select IMU</option>
+                </select>
+            </div>
+        </div>
+        <!-- <iframe id="show-debug-output" src="https://localhost:4430/debug_output.html"></iframe> -->
+        <!-- Add more content here as needed -->
+
+        <div style="left: 50%; top: 50%;">
+            <a href="./controller.html" style="font-size: 30px;">Arm Controller</a>
+            <br> <br>
+
+            <button id="resetEstimation" style="font-size: 30px;">Reset Estimation</button>
+
+        </div>
+    </div>
+
+</body>
+<script src="./third-party/html5-qrcode/minified/html5-qrcode.min.js"></script>
+<script type="module">
+    var lastResult;
+
+    registrationNotification = document.getElementById("registration_notification");
+    console.log(document.getElementsByClassName("imu-selector"));
+
+    // document.querySelectorAll(".imu-selector").forEach(e => e.addEventListener("click", addElementToSelectors));
+
+    function createDebugMsgFrame() {
+        // iframe要素を生成
+        const iframe = document.createElement('iframe');
+        // 必要な属性を設定
+        iframe.id = 'show-debug-output';
+        iframe.src = `https://${window.location.hostname}:4430/debug_output.html`;
+
+        // iframeをDOMに追加
+        document.getElementById("right-section").appendChild(iframe);
+    }
+
+    const imuSelector1 = document.getElementById("imu-selector1");
+    const imuSelector2 = document.getElementById("imu-selector2");
+    imuSelector1.addEventListener('change', (e) => { onImuNameChange(0, e.target.value) });
+    imuSelector2.addEventListener('change', (e) => { onImuNameChange(1, e.target.value) });
+
+
+    function postWebsocket(decodedText) {
+        if (webSocket.readyState != 1) {
+            connect();
+        }
+        webSocket.send(JSON.stringify({ "request": "decodedResult", "text": decodedText }));
+    }
+
+    function docReady(fn) {
+        // see if DOM is already available
+        if (document.readyState === "complete"
+            || document.readyState === "interactive") {
+            // call on next available tick
+            setTimeout(fn, 2.);
+        } else {
+            document.addEventListener("DOMContentLoaded", fn);
+        }
+    }
+
+    docReady(function () {
+        // createDebugMsgFrame();
+        // var resultContainer = document.getElementById('qr-reader-results');
+        var countResults = 0;
+        function onScanSuccess(decodedText, decodedResult) {
+            if (decodedText !== lastResult) {
+                ++countResults;
+                lastResult = decodedText;
+                postWebsocket(decodedText);
+                // Handle on success condition with the decoded message.
+                console.log(`Scan result ${decodedText}`, decodedResult);
+            }
+        }
+
+        var html5QrcodeScanner = new Html5QrcodeScanner(
+            "qr-reader", {
+            fps: 10, qrbox: 250,
+            formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE]
+        });
+        //     "reader", {
+        //     fps: 10, qrbox: 250,
+        //     formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE]
+        // });
+        html5QrcodeScanner.render(onScanSuccess);
+
+        connect();
+    });
+
+
+    // 加速度センサのオンオフボタン
+    const resetEstimationButton = document.getElementById("resetEstimation");
+
+    resetEstimationButton.addEventListener("click", () => {
+        webSocket.send(JSON.stringify({ "request": "resetEstimation" }));
+    });
+</script>
+
+</html>

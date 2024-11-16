@@ -1,0 +1,4 @@
+<launch>
+    <node pkg="multiimu" type="sgfilter.py" name="sgfilter" output="screen" />
+    <node pkg="multiimu" type="synchronize.py" name="synchronizer" output="screen" />
+</launch>

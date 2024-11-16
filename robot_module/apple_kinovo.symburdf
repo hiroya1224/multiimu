@@ -38,7 +38,7 @@
   <!-- macro for generator for IMUs' reference frames -->
   <xacro:macro name="joint_with_imu_link_symbolic"
                params="joint_name parent_link child_link">
-    <xacro:joint_with_imu_link
+    <xacro: 
             joint_name="${joint_name}"
             parent_link="${parent_link}" child_link="${child_link}"
             xyz="#|${joint_name}_xyz|#" rpy="#|${joint_name}_rpy|#" />

@@ -1,0 +1,11 @@
+<launch>
+    <!-- <arg name="imuname"/> -->
+    <node pkg="urdf_estimation_with_imus" type="imu_calibrator.py" name="imu_calibrator" output="screen" />
+
+    <node pkg="urdf_estimation_with_imus" type="extleastsq_estim_imu_relpose.py" name="estimator1"
+          args="--this imua0201c --child imu6ca3b8 --nosymburdf" output="screen" />
+    <node pkg="urdf_estimation_with_imus" type="extleastsq_estim_imu_relpose.py" name="estimator2"
+          args="--this imua00fc8 --child imua015d0 --nosymburdf" output="screen" />
+
+    <node pkg="urdf_estimation_with_imus" type="direct_urdf_maker.py" name="direct_urdf_maker" output="screen" />
+</launch>

@@ -11,15 +11,23 @@ import numpy as np
 import quaternion
 
 import rospy
-from geometry_msgs.msg import PoseStamped
+import roslib
 
+from geometry_msgs.msg import PoseStamped
+from std_msgs.msg import String
 
 rospy.init_node('iphone_pose_pub', disable_signals=True)  # Disable rospy's signal handling
 
+ROOT = os.path.join(roslib.packages.get_pkg_dir("multiimu"), "https-server")
+HTTPS_ROOT = os.path.join(roslib.packages.get_pkg_dir("multiimu"), "controller")
+
+CERTFILE = os.path.join(ROOT, "server.crt")
+KEYFILE = os.path.join(ROOT, "server.key")
+
 class ROSAsyncNode:
-    def __init__(self, topic_name):
+    def __init__(self, topic_name, topic_type=PoseStamped):
         # self.message_queue = asyncio.Queue()
-        self.publisher = rospy.Publisher(topic_name, PoseStamped, queue_size=10)
+        self.publisher = rospy.Publisher(topic_name, topic_type, queue_size=1)
         # rospy.Subscriber('/input_topic', PoseStamped, self.callback)
 
     # def callback(self, msg):
@@ -43,6 +51,8 @@ class ROSAsyncNode:
 ros_node1 = ROSAsyncNode("/iphone")
 ros_node2 = ROSAsyncNode("/iphone_modified")
 ros_node3 = ROSAsyncNode("/iphone_aligned")
+
+ros_node_gripper = ROSAsyncNode("/gripper_control", String)
 
 def get_local_ip():
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
@@ -140,7 +150,7 @@ async def handle(request):
     if path == '':
         path = 'index.html'
     
-    file_path = os.path.join('../controller', path)
+    file_path = os.path.join(HTTPS_ROOT, path)
 
     if os.path.isdir(file_path):
         file_path = os.path.join(file_path, 'index.html')
@@ -156,7 +166,7 @@ async def handle(request):
 
 reference_quat = quaternion.as_quat_array(np.array([1, 0, 0, 0]))
 
-position_3D = np.array([-1,1,1])
+position_3D = np.array([0,0,0])
 
 async def websocket_handler(request):
     global reference_quat, position_3D
@@ -174,6 +184,11 @@ async def websocket_handler(request):
                 control = data.get("control")
                 action = data.get("action")
 
+                ros_node_gripper.publish_messages(
+                        msg.data
+                )
+                print("pub")
+
                 if control == "joystick":
                     # X = action.get("x")
                     # Y = action.get("y")
@@ -181,72 +196,81 @@ async def websocket_handler(request):
                     Y = -action.get("x")
                     # print(f"Joystick position - x: {x}, y: {y}")
 
-                elif control == "deviceOrientation":
-                    # クォータニオンデータを取得
-                    w = action.get("w")
-                    x = action.get("x")
-                    y = action.get("y")
-                    z = action.get("z")
-                    # print(f"Device orientation (quaternion) - w: {w}, x: {x}, y: {y}, z: {z}")
-                    quat = np.array([w,x,y,z]) * np.sign(w)
-                    print(qh.align_xaxis(quat))
-                    quat_mod = qh.matrix_to_quaternion(qh.align_xaxis(quat))
+                # elif control == "deviceOrientation":
+                #     # クォータニオンデータを取得
+                #     w = action.get("w")
+                #     x = action.get("x")
+                #     y = action.get("y")
+                #     z = action.get("z")
+                #     # print(f"Device orientation (quaternion) - w: {w}, x: {x}, y: {y}, z: {z}")
+                #     quat = np.array([w,x,y,z]) * np.sign(w)
+                #     print(qh.align_xaxis(quat))
+                #     quat_mod = qh.matrix_to_quaternion(qh.align_xaxis(quat))
 
-                    msg1 = PoseStamped()
-                    msg1.header.stamp = rospy.Time.now()
-                    msg1.header.frame_id = "world"
-                    msg1.pose.position.x = 0.
-                    msg1.pose.position.y = 0.
-                    msg1.pose.position.z = 0.
-                    msg1.pose.orientation.w = quat[0]
-                    msg1.pose.orientation.x = quat[1]
-                    msg1.pose.orientation.y = quat[2]
-                    msg1.pose.orientation.z = quat[3]
+                #     msg1 = PoseStamped()
+                #     msg1.header.stamp = rospy.Time.now()
+                #     msg1.header.frame_id = "world"
+                #     msg1.pose.position.x = 0.
+                #     msg1.pose.position.y = 0.
+                #     msg1.pose.position.z = 0.
+                #     msg1.pose.orientation.w = quat[0]
+                #     msg1.pose.orientation.x = quat[1]
+                #     msg1.pose.orientation.y = quat[2]
+                #     msg1.pose.orientation.z = quat[3]
 
-                    await ros_node1.publish_messages(msg1)
-
-
-                    msg2 = PoseStamped()
-                    msg2.header.stamp = rospy.Time.now()
-                    msg2.header.frame_id = "world"
-                    msg2.pose.position.x = 1.
-                    msg2.pose.position.y = 0.
-                    msg2.pose.position.z = 0.
-                    msg2.pose.orientation.w = quat_mod[0]
-                    msg2.pose.orientation.x = quat_mod[1]
-                    msg2.pose.orientation.y = quat_mod[2]
-                    msg2.pose.orientation.z = quat_mod[3]
+                #     await ros_node1.publish_messages(msg1)
 
 
-                    await ros_node2.publish_messages(msg2)
+                #     msg2 = PoseStamped()
+                #     msg2.header.stamp = rospy.Time.now()
+                #     msg2.header.frame_id = "world"
+                #     msg2.pose.position.x = 1.
+                #     msg2.pose.position.y = 0.
+                #     msg2.pose.position.z = 0.
+                #     msg2.pose.orientation.w = quat_mod[0]
+                #     msg2.pose.orientation.x = quat_mod[1]
+                #     msg2.pose.orientation.y = quat_mod[2]
+                #     msg2.pose.orientation.z = quat_mod[3]
 
-                    try:
-                        quat_aligned = quaternion.as_quat_array(quat) * reference_quat.conj()
-                        # print(quaternion.as_quat_array(quat))
-                        rot_aligned = quaternion.as_rotation_matrix(quat_aligned)
 
-                        print("rot_aligned @ np.array([X, Y, 0]))", rot_aligned @ np.array([X, Y, 0]))
+                #     await ros_node2.publish_messages(msg2)
 
-                        position_3D = position_3D + (rot_aligned @ np.array([X, Y, 0])) * 0.1
+                #     try:
+                #         quat_aligned = quaternion.as_quat_array(quat) * reference_quat.conj()
+                #         # print(quaternion.as_quat_array(quat))
+                #         rot_aligned = quaternion.as_rotation_matrix(quat_aligned)
 
-                        msg3 = PoseStamped()
-                        msg3.header.stamp = rospy.Time.now()
-                        msg3.header.frame_id = "world"
-                        msg3.pose.position.x = position_3D[0]
-                        msg3.pose.position.y = position_3D[1]
-                        msg3.pose.position.z = position_3D[2]
-                        msg3.pose.orientation.w = quat_aligned.w
-                        msg3.pose.orientation.x = quat_aligned.x
-                        msg3.pose.orientation.y = quat_aligned.y
-                        msg3.pose.orientation.z = quat_aligned.z
+                #         print("rot_aligned @ np.array([X, Y, 0]))", rot_aligned @ np.array([X, Y, 0]))
 
-                        await ros_node3.publish_messages(msg3)
-                    except Exception as e:
-                        print(e)
+                #         position_3D = position_3D + (rot_aligned @ np.array([X, Y, 0])) 
 
-                elif control == "buttonY":
-                    if action == "press":
-                        reference_quat = quaternion.as_quat_array(quat_mod)
+                #         msg3 = PoseStamped()
+                #         msg3.header.stamp = rospy.Time.now()
+                #         msg3.header.frame_id = "world"
+                #         msg3.pose.position.x = position_3D[0]
+                #         msg3.pose.position.y = position_3D[1]
+                #         msg3.pose.position.z = position_3D[2]
+                #         msg3.pose.orientation.w = quat_aligned.w
+                #         msg3.pose.orientation.x = quat_aligned.x
+                #         msg3.pose.orientation.y = quat_aligned.y
+                #         msg3.pose.orientation.z = quat_aligned.z
+
+                #         await ros_node3.publish_messages(msg3)
+                #     except Exception as e:
+                #         print(e)
+
+                # elif control == "buttonY":
+                #     if action == "press":
+                #         reference_quat = quaternion.as_quat_array(quat_mod)
+
+                # # elif control == "buttonX":
+                # #     ros_node_gripper.publish_messages(
+                # #         json.dumps({"control": "gripper_open_close", "button_action": action})
+                # #     )
+                # # elif control == "buttonY":
+                # #     ros_node_gripper.publish_messages(
+                # #         json.dumps({"control": "gripper_rotation", "button_action": action})
+                # #     )
                     
                 else:
                     print(f"Unknown control type: {control}")
@@ -272,7 +296,7 @@ async def start_http_server():
     app = await init_http_app()
 
     ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
-    ssl_context.load_cert_chain(certfile='server.crt', keyfile='server.key')
+    ssl_context.load_cert_chain(certfile=CERTFILE, keyfile=KEYFILE)
 
     runner = web.AppRunner(app)
     await runner.setup()
@@ -286,7 +310,7 @@ async def start_websocket_server():
     app.router.add_get('/server_handler', websocket_handler)
 
     ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
-    ssl_context.load_cert_chain(certfile='server.crt', keyfile='server.key')
+    ssl_context.load_cert_chain(certfile=CERTFILE, keyfile=KEYFILE)
 
     runner = web.AppRunner(app)
     await runner.setup()

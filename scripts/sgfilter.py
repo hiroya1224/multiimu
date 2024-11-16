@@ -30,10 +30,11 @@ class SavitzkyGolayFilter:
         self.imu_data_queues[frame_id].append(imu_data)
         self.imu_timestamps_queues[frame_id].append(timestamp)
 
-        rospy.loginfo(f"Added IMU data and timestamp to queues for frame_id '{frame_id}'")
+        # rospy.loginfo(f"Added IMU data and timestamp to queues for frame_id '{frame_id}'")
 
         # After adding new data, attempt to calculate coefficients and publish
-        self.publish_coefficients(frame_id)
+        if self.is_data_ready(frame_id):
+            self.publish_coefficients(frame_id)
 
     def convert_to_array(self, msg):
         # Create an np.array with angular and linear accelerations
@@ -54,59 +55,68 @@ class SavitzkyGolayFilter:
 
     def calc_polynomial_coeffs(self, frame_id):
         if not self.is_data_ready(frame_id):
-            rospy.logwarn(f"Not enough data to calculate coefficients for frame_id '{frame_id}'")
+            # rospy.logwarn(f"Not enough data to calculate coefficients for frame_id '{frame_id}'")
             return None
 
         # Extract timestamps and IMU data from the queues
         t_list = np.array(self.imu_timestamps_queues[frame_id])
         imu_data = np.vstack(self.imu_data_queues[frame_id])
 
+        # rospy.logwarn(frame_id)
+        # rospy.logwarn(self.imu_data_queues[frame_id])
+        # rospy.logwarn(self.imu_timestamps_queues[frame_id])
+
         # Focusing on the middle timestamp
         mid_idx = len(t_list) // 2
         focusing_t = t_list[mid_idx]
         shift_t = t_list - focusing_t
 
-        rospy.logwarn(shift_t)
+        # rospy.logwarn(shift_t)
 
         # Create matrix A for polynomial fitting
         A = np.vstack([shift_t ** i for i in range(self.poly_deg + 1)]).T
 
-        rospy.logwarn(f"A.shape = {A.shape}")
-        rospy.logwarn(f"imu_data.shape = {imu_data.shape}")
+        # rospy.logwarn(f"A.shape = {A.shape}")
+        # rospy.logwarn(f"imu_data.shape = {imu_data.shape}")
     
         # Calculate polynomial coefficients using least squares
         coeffs = np.linalg.pinv(A) @ imu_data
 
-        return coeffs
+        # if np.max(A @ coeffs) > 100:
+        #     rospy.loginfo(f"raw_data = {imu_data}")
+        #     rospy.loginfo(f"reconst = {A @ coeffs}")
+
+
+        return coeffs, focusing_t
 
     def publish_coefficients(self, frame_id):
         """Calculate and publish the polynomial coefficients."""
-        coeffs = self.calc_polynomial_coeffs(frame_id)
+        coeffs, focusing_t = self.calc_polynomial_coeffs(frame_id)
         if coeffs is not None:
             # Create a SavitzkyGolayCoeff message
             coeff_msg = SavitzkyGolayCoeff()
-            coeff_msg.header.stamp = rospy.Time.now()
+            coeff_msg.header.stamp = rospy.Time.from_sec(focusing_t)
             coeff_msg.header.frame_id = frame_id
             coeff_msg.polynomial_degree = self.poly_deg
             coeff_msg.half_datalength = self.half_datalength
             coeff_msg.timelist = np.array(self.imu_timestamps_queues[frame_id]).tolist()
             coeff_msg.coefflist = coeffs.flatten().tolist()  # Flatten the coefficients for the message
 
-            rospy.logwarn(f"coeff_msg.polynomial_degree = {coeff_msg.polynomial_degree}")
-            rospy.logwarn(f"coeff_msg.half_datalength = {coeff_msg.half_datalength}")
-            rospy.logwarn(f"len(coeff_msg.coefflist) = {len(coeff_msg.coefflist)}")
-            rospy.logwarn(f"coeffs.shape = {coeffs.shape}")
-            rospy.logwarn(f"self.queue_size = {self.queue_size}")
+            # rospy.logwarn(f"coeff_msg.polynomial_degree = {coeff_msg.polynomial_degree}")
+            # rospy.logwarn(f"coeff_msg.half_datalength = {coeff_msg.half_datalength}")
+            # rospy.logwarn(f"len(coeff_msg.coefflist) = {len(coeff_msg.coefflist)}")
+            # rospy.logwarn(f"coeffs.shape = {coeffs.shape}")
+            # rospy.logwarn(f"self.queue_size = {self.queue_size}")
 
-            rospy.logwarn(np.array(self.imu_timestamps_queues[frame_id]).tolist())
+            # rospy.logwarn(np.array(self.imu_timestamps_queues[frame_id]).tolist())
             
             # Publish the message
             self.coeff_pub.publish(coeff_msg)
-            rospy.loginfo(f"Published coefficients for frame_id '{frame_id}'")
+            # rospy.loginfo(f"Published coefficients for frame_id '{frame_id}'")
 
     def run(self):
         rospy.spin()
 
 if __name__ == '__main__':
-    filter = SavitzkyGolayFilter(M=7, N=11)
+    filter = SavitzkyGolayFilter(M=3, N=5)
     filter.run()

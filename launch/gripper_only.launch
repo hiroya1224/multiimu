@@ -1,0 +1,5 @@
+<launch>
+    <arg name="baud" default="921600"/>
+    <node pkg="multiimu" type="run_https_async.py" name="https_server" output="screen" />
+    <node pkg="multiimu" type="gripper_control.py" name="gripper_control" output="screen" />
+</launch>
